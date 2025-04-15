@@ -1,61 +1,88 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>DRS Replay Camera</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 text-gray-800 min-h-screen flex flex-col items-center justify-center p-4">
+<body class="flex flex-col items-center justify-center p-4 bg-white min-h-screen">
 
-  <h1 class="text-2xl font-bold mb-4">🏏 DRS Replay Camera</h1>
-  <video id="livePreview" autoplay playsinline class="w-full max-w-md rounded shadow mb-4"></video>
+  <h1 class="text-xl font-bold mb-4 text-center">🎥 DRS Replay Camera</h1>
 
-  <div class="space-x-4">
-    <button id="startBtn" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Start Camera</button>
-    <button id="saveBtn" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Save Last 5 Mins</button>
-  </div>
+  <!-- Switch Camera Button -->
+  <button id="toggleCamera" class="bg-blue-600 text-white px-4 py-2 rounded mb-4 hover:bg-blue-700 transition">
+    Switch Camera 🔄
+  </button>
+
+  <!-- Live Camera Preview -->
+  <video id="livePreview" autoplay playsinline class="w-full max-w-md border rounded mb-4 shadow-lg"></video>
+
+  <!-- Save Button -->
+  <button onclick="saveClip()" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition">
+    Save Last 5 Minutes 🎬
+  </button>
 
   <script>
+    let useRearCamera = true;
     let mediaRecorder;
+    let stream;
     let chunks = [];
-    let isRecording = false;
-    const MAX_CHUNKS = 300; // Approx. 5 minutes if CHUNK_DURATION is 1000ms
-    const CHUNK_DURATION = 1000; // 1 second
+    const MAX_BUFFER_MB = 50 * 1024 * 1024; // Approx 5 minutes of video
 
-    document.getElementById('startBtn').addEventListener('click', async () => {
-      if (isRecording) return;
-
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-      const video = document.getElementById("livePreview");
-      video.srcObject = stream;
-
-      mediaRecorder = new MediaRecorder(stream);
-
-      mediaRecorder.ondataavailable = e => {
-        chunks.push(e.data);
-        if (chunks.length > MAX_CHUNKS) {
-          chunks.shift(); // remove oldest chunk to keep buffer size limited
-        }
-      };
-
-      mediaRecorder.start(CHUNK_DURATION); // Start recording in intervals
-      isRecording = true;
-    });
-
-    document.getElementById('saveBtn').addEventListener('click', () => {
-      if (!chunks.length) {
-        alert("Nothing recorded yet!");
-        return;
+    async function startCamera() {
+      // Stop previous camera stream if exists
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
       }
 
-      const blob = new Blob(chunks, { type: 'video/webm' });
+      const constraints = {
+        video: {
+          facingMode: useRearCamera ? { exact: "environment" } : "user"
+        },
+        audio: false
+      };
+
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+        document.getElementById("livePreview").srcObject = stream;
+
+        chunks = [];
+        mediaRecorder = new MediaRecorder(stream);
+
+        mediaRecorder.ondataavailable = e => {
+          chunks.push(e.data);
+          let totalSize = chunks.reduce((acc, val) => acc + val.size, 0);
+          while (totalSize > MAX_BUFFER_MB) {
+            chunks.shift();
+            totalSize = chunks.reduce((acc, val) => acc + val.size, 0);
+          }
+        };
+
+        mediaRecorder.start(1000); // Save data every second
+      } catch (err) {
+        alert("Camera access failed: " + err.message);
+      }
+    }
+
+    // Switch between front and rear camera
+    document.getElementById("toggleCamera").addEventListener("click", () => {
+      useRearCamera = !useRearCamera;
+      startCamera();
+    });
+
+    // Save last few minutes of video
+    function saveClip() {
+      const blob = new Blob(chunks, { type: "video/webm" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "drs-clip.webm";
+      a.download = "drs-replay.webm";
       a.click();
-    });
+    }
+
+    // Start camera on load
+    startCamera();
   </script>
 </body>
 </html>

@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DRS Replay Camera</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 text-gray-800 min-h-screen flex flex-col items-center justify-center p-4">
+
+  <h1 class="text-2xl font-bold mb-4">🏏 DRS Replay Camera</h1>
+  <video id="livePreview" autoplay playsinline class="w-full max-w-md rounded shadow mb-4"></video>
+
+  <div class="space-x-4">
+    <button id="startBtn" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Start Camera</button>
+    <button id="saveBtn" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Save Last 5 Mins</button>
+  </div>
+
+  <script>
+    let mediaRecorder;
+    let chunks = [];
+    let isRecording = false;
+    const MAX_CHUNKS = 300; // Approx. 5 minutes if CHUNK_DURATION is 1000ms
+    const CHUNK_DURATION = 1000; // 1 second
+
+    document.getElementById('startBtn').addEventListener('click', async () => {
+      if (isRecording) return;
+
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      const video = document.getElementById("livePreview");
+      video.srcObject = stream;
+
+      mediaRecorder = new MediaRecorder(stream);
+
+      mediaRecorder.ondataavailable = e => {
+        chunks.push(e.data);
+        if (chunks.length > MAX_CHUNKS) {
+          chunks.shift(); // remove oldest chunk to keep buffer size limited
+        }
+      };
+
+      mediaRecorder.start(CHUNK_DURATION); // Start recording in intervals
+      isRecording = true;
+    });
+
+    document.getElementById('saveBtn').addEventListener('click', () => {
+      if (!chunks.length) {
+        alert("Nothing recorded yet!");
+        return;
+      }
+
+      const blob = new Blob(chunks, { type: 'video/webm' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "drs-clip.webm";
+      a.click();
+    });
+  </script>
+</body>
+</html>
